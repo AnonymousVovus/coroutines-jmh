@@ -100,7 +100,7 @@ open class CreateDetachedTaskPayloadJmh {
 
     }
 
-    val dispatcher = ForkJoinPool.commonPool().asCoroutineDispatcher()
+    private val dispatcher = ForkJoinPool.commonPool().asCoroutineDispatcher()
 
     @Benchmark
     @Throws(InterruptedException::class)
