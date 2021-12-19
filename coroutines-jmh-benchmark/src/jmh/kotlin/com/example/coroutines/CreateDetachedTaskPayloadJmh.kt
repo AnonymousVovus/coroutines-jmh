@@ -107,7 +107,7 @@ open class CreateDetachedTaskPayloadJmh {
     open fun create_task_payload_using_coroutines_concurrent_channel() = runBlocking(dispatcher) {
 
         val channel = Channel<MockDetachedTask>()
-        val parallelism = Runtime.getRuntime().availableProcessors() * 2;
+        val parallelism = Runtime.getRuntime().availableProcessors()
 
         val j = launch {
             tasks.asSequence().map { launch { channel.send(it) } }
