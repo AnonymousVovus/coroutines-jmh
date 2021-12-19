@@ -9,12 +9,15 @@ import org.openjdk.jmh.annotations.State
 import java.util.*
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ForkJoinPool
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
 import kotlin.jvm.Throws
 
 
 @State(Scope.Benchmark)
 open class CreateDetachedTaskPayloadJmh {
+
+    private val dispatcher = ForkJoinPool.commonPool().asCoroutineDispatcher()
 
     private val tasks = List(500) {
         MockDetachedTask(
@@ -26,20 +29,20 @@ open class CreateDetachedTaskPayloadJmh {
         )
     }
 
-//    @Benchmark
-//    @Throws(InterruptedException::class)
-//    open fun create_task_payload_using_parallel_stream() {
-//
-//        tasks.parallelStream().map {
-//            DetachedTaskPayloadFactory.createPayloadByDetachedTask(
-//                task = it,
-//                topic = "parallelStreamTopic",
-//                partition = 1,
-//                offset = 1,
-//                taskHolderId = 123
-//            )
-//        }.collect(Collectors.toList())
-//    }
+    @Benchmark
+    @Throws(InterruptedException::class)
+    open fun create_task_payload_using_parallel_stream() {
+
+        tasks.parallelStream().map {
+            DetachedTaskPayloadFactory.createPayloadByDetachedTask(
+                task = it,
+                topic = "parallelStreamTopic",
+                partition = 1,
+                offset = 1,
+                taskHolderId = 123
+            )
+        }.collect(Collectors.toList())
+    }
 
 
 
@@ -100,7 +103,6 @@ open class CreateDetachedTaskPayloadJmh {
 
     }
 
-    private val dispatcher = ForkJoinPool.commonPool().asCoroutineDispatcher()
 
     @Benchmark
     @Throws(InterruptedException::class)
@@ -133,13 +135,36 @@ open class CreateDetachedTaskPayloadJmh {
         channel.close()
     }
 
-
-    /*
     @Benchmark
     @Throws(InterruptedException::class)
-    open fun create_task_payload_using_coroutines_as_flow() {
+    open fun create_task_payload_using_coroutines_as_flow_emit() = runBlocking(dispatcher) {
 
-        runBlocking {
+        val flow = MutableSharedFlow<MockDetachedTask>()
+        val atomicSize = AtomicInteger(0)
+
+        val job = launch {
+            flow.collect {
+                atomicSize.incrementAndGet()
+                DetachedTaskPayloadFactory.createPayloadByDetachedTask(
+                    task = it,
+                    topic = "coroutineTopic",
+                    partition = 1,
+                    offset = 1,
+                    taskHolderId = 123
+                )
+            }
+        }
+
+        launch {
+            tasks.asSequence().map { launch { flow.emit(it) } }
+        }.join()
+
+        job.cancel()
+    }
+
+    @Benchmark
+    @Throws(InterruptedException::class)
+    open fun create_task_payload_using_coroutines_as_flow() = runBlocking(dispatcher) {
 
             //Flow take найти skip или offset
             tasks.asFlow().map {
@@ -151,11 +176,9 @@ open class CreateDetachedTaskPayloadJmh {
                     taskHolderId = 123
                 )
             }.toList()
-
-        }
-
     }
 
+    /*
     @Benchmark
     @Throws(InterruptedException::class)
     open fun create_task_payload_using_coroutines_as_flow_async() {
