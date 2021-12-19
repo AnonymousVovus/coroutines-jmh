@@ -34,41 +34,31 @@ fun main() = runBlocking(dispatcher) {
     println("Parallel stream: $time")
 
     time = measureTimeMillis {
-        repeat(1000) {
-            create_task_payload_simple(tasks)
-        }
+        create_task_payload_simple(tasks)
     }
 
     println("Linear: $time")
 
     time = measureTimeMillis {
-        repeat(1000) {
-            create_task_payload_completable_future(tasks)
-        }
+        create_task_payload_completable_future(tasks)
     }
 
     println("Completable Future: $time")
 
     time = measureTimeMillis {
-        repeat(1000) {
-            create_task_payload_using_coroutines_default(tasks)
-        }
+        create_task_payload_using_coroutines_default(tasks)
     }
 
     println("Default coroutines: $time")
 
     time = measureTimeMillis {
-        repeat(1000) {
-            create_task_payload_using_coroutines_concurrent_channel(tasks)
-        }
+        create_task_payload_using_coroutines_concurrent_channel(tasks)
     }
 
     println("Concurrent channel: $time")
 
     time = measureTimeMillis {
-        repeat(1000) {
-            create_task_payload_using_coroutines_as_flow_emit(tasks)
-        }
+        create_task_payload_using_coroutines_as_flow_emit(tasks)
     }
 
     println("Flow emitter: $time")
@@ -168,7 +158,7 @@ suspend fun create_task_payload_using_coroutines_concurrent_channel(
     j.join()
     channel.close()
     jobs.joinAll()
-    //println(atomicSize.get())
+    println(atomicSize.get())
 }
 
 suspend fun create_task_payload_using_coroutines_as_flow_emit(
@@ -197,5 +187,5 @@ suspend fun create_task_payload_using_coroutines_as_flow_emit(
 
     while (atomicSize.get() < tasks.size) {}
     job.cancel()
-    //println(atomicSize.get())
+    println(atomicSize.get())
 }
