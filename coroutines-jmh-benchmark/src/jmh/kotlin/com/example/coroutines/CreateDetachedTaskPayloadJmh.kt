@@ -3,13 +3,12 @@ package com.example.coroutines
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
-import org.openjdk.jmh.annotations.Benchmark
-import org.openjdk.jmh.annotations.Scope
-import org.openjdk.jmh.annotations.State
+import org.openjdk.jmh.annotations.*
 import java.util.*
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import java.util.stream.Collectors
 import kotlin.jvm.Throws
 
@@ -17,7 +16,17 @@ import kotlin.jvm.Throws
 @State(Scope.Benchmark)
 open class CreateDetachedTaskPayloadJmh {
 
-    private val dispatcher = ForkJoinPool.commonPool().asCoroutineDispatcher()
+    @Setup
+    fun setUp() {
+        corCounter.set(0)
+    }
+
+    @TearDown
+    fun end() {
+        print("Count: ${corCounter.get()} ")
+    }
+
+    private val corCounter = AtomicLong(0)
 
     private val tasks = List(500) {
         MockDetachedTask(
@@ -32,8 +41,9 @@ open class CreateDetachedTaskPayloadJmh {
     @Benchmark
     @Throws(InterruptedException::class)
     open fun mode_A_payload_simple() {
-
+        corCounter.set(0)
         tasks.map {
+            corCounter.incrementAndGet()
             DetachedTaskPayloadFactory.createPayloadByDetachedTask(
                 task = it,
                 topic = "simpleTopic",
@@ -47,8 +57,9 @@ open class CreateDetachedTaskPayloadJmh {
     @Benchmark
     @Throws(InterruptedException::class)
     open fun mode_B_payload_using_parallel_stream() {
-
+        corCounter.set(0)
         tasks.parallelStream().map {
+            corCounter.incrementAndGet()
             DetachedTaskPayloadFactory.createPayloadByDetachedTask(
                 task = it,
                 topic = "parallelStreamTopic",
@@ -62,9 +73,10 @@ open class CreateDetachedTaskPayloadJmh {
     @Benchmark
     @Throws(InterruptedException::class)
     open fun mode_C_payload_completable_future() {
-
+        corCounter.set(0)
         val futures = tasks.map {
             CompletableFuture.supplyAsync {
+                corCounter.incrementAndGet()
                 DetachedTaskPayloadFactory.createPayloadByDetachedTask(
                     task = it,
                     topic = "simpleTopic",
@@ -80,75 +92,11 @@ open class CreateDetachedTaskPayloadJmh {
 
     @Benchmark
     @Throws(InterruptedException::class)
-    open fun mode_D_payload_using_coroutines_default() = runBlocking(Dispatchers.Default) {
-
-        runInterruptible {
-            tasks.map {
-
-                async {
-                    DetachedTaskPayloadFactory.createPayloadByDetachedTask(
-                        task = it,
-                        topic = "coroutineTopic",
-                        partition = 1,
-                        offset = 1,
-                        taskHolderId = 123
-                    )
-                }
-            }
-        }.awaitAll()
-
-    }
-
-
-    @Benchmark
-    @Throws(InterruptedException::class)
-    open fun mode_E_payload_using_coroutines_concurrent_channel() = runBlocking(dispatcher) {
-
-        val channel = Channel<MockDetachedTask>()
-        val parallelism = Runtime.getRuntime().availableProcessors()
-        val atomicSize = AtomicInteger(0)
-        val jobs1 = mutableListOf<Job>()
-
-        val j = launch {
-            tasks.map {
-                jobs1.add(launch { channel.send(it) })
-            }
-        }
-
-        val jobs = mutableListOf<Job>()
-
-        (1..parallelism).forEach { _ ->
-            jobs.add(launch {
-                for (t in channel) {
-                    atomicSize.incrementAndGet()
-                    DetachedTaskPayloadFactory.createPayloadByDetachedTask(
-                        task = t,
-                        topic = "coroutineTopic",
-                        partition = 1,
-                        offset = 1,
-                        taskHolderId = 123
-                    )
-                }
-            })
-        }
-
-        while (jobs1.size < tasks.size) {}
-        jobs1.joinAll()
-        j.join()
-        channel.close()
-        jobs.joinAll()
-    }
-
-    @Benchmark
-    @Throws(InterruptedException::class)
-    open fun mode_F_payload_using_coroutines_as_flow_emit() = runBlocking(dispatcher) {
-
-        val flow = MutableSharedFlow<MockDetachedTask>()
-        val atomicSize = AtomicInteger(0)
-
-        val job = launch {
-            flow.collect {
-                atomicSize.incrementAndGet()
+    open fun mode_D_payload_using_coroutines_default() = runBlocking {
+        corCounter.set(0)
+        tasks.map {
+            async {
+                corCounter.incrementAndGet()
                 DetachedTaskPayloadFactory.createPayloadByDetachedTask(
                     task = it,
                     topic = "coroutineTopic",
@@ -157,77 +105,27 @@ open class CreateDetachedTaskPayloadJmh {
                     taskHolderId = 123
                 )
             }
-        }
-
-        launch {
-            tasks.map { launch { flow.emit(it) } }
-        }.join()
-
-        while (atomicSize.get() < tasks.size) {}
-        job.cancel()
-    }
-
-//    @Benchmark
-//    @Throws(InterruptedException::class)
-//    open fun create_task_payload_using_coroutines_as_flow() = runBlocking(dispatcher) {
-//
-//            //Flow take найти skip или offset
-//            tasks.asFlow().map {
-//                DetachedTaskPayloadFactory.createPayloadByDetachedTask(
-//                    task = it,
-//                    topic = "coroutineTopic",
-//                    partition = 1,
-//                    offset = 1,
-//                    taskHolderId = 123
-//                )
-//            }.toList()
-//    }
-
-    /*
-    @Benchmark
-    @Throws(InterruptedException::class)
-    open fun create_task_payload_using_coroutines_as_flow_async() {
-
-        runBlocking {
-
-            //Flow take найти skip или offset
-            tasks.asFlow().map {
-                async {
-                    DetachedTaskPayloadFactory.createPayloadByDetachedTask(
-                        task = it,
-                        topic = "coroutineTopic",
-                        partition = 1,
-                        offset = 1,
-                        taskHolderId = 123
-                    )
-                }.await()
-            }.toList()
-
-        }
-
+        }.awaitAll()
     }
 
     @Benchmark
     @Throws(InterruptedException::class)
-    open fun create_task_payload_using_coroutines_as_flow_async_awaitAll() {
+    open fun mode_E_payload_using_coroutines_parallel() {
+        corCounter.set(0)
 
-        runBlocking {
-
-            //Flow take найти skip или offset
-            tasks.asFlow().map {
-                async {
-                    DetachedTaskPayloadFactory.createPayloadByDetachedTask(
-                        task = it,
-                        topic = "coroutineTopic",
-                        partition = 1,
-                        offset = 1,
-                        taskHolderId = 123
-                    )
-                }
-            }.toList().awaitAll()
-
+        tasks.forEachParallel {
+            corCounter.incrementAndGet()
+            DetachedTaskPayloadFactory.createPayloadByDetachedTask(
+                task = it,
+                topic = "coroutineTopic",
+                partition = 1,
+                offset = 1,
+                taskHolderId = 123
+            )
         }
-
     }
-    */
+
+    private fun <A> Collection<A>.forEachParallel(f: suspend (A) -> Unit): Unit = runBlocking {
+        map { async { f(it) } }.awaitAll()
+    }
 }

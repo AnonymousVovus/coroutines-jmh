@@ -9,9 +9,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
-import kotlin.system.measureNanoTime
 import kotlin.system.measureTimeMillis
-import kotlin.time.measureTime
 
 private val dispatcher = ForkJoinPool.commonPool().asCoroutineDispatcher()
 private val scope = CoroutineScope(dispatcher)
