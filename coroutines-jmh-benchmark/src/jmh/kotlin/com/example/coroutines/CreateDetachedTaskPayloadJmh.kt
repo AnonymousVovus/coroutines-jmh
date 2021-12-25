@@ -1,16 +1,13 @@
 package com.example.coroutines
 
-import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
 import org.openjdk.jmh.annotations.*
 import java.util.*
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ForkJoinPool
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.stream.Collectors
-import kotlin.jvm.Throws
 
 
 @State(Scope.Benchmark)
@@ -112,7 +109,6 @@ open class CreateDetachedTaskPayloadJmh {
     @Throws(InterruptedException::class)
     open fun mode_E_payload_using_coroutines_parallel() {
         corCounter.set(0)
-
         tasks.forEachParallel {
             corCounter.incrementAndGet()
             DetachedTaskPayloadFactory.createPayloadByDetachedTask(
@@ -125,7 +121,54 @@ open class CreateDetachedTaskPayloadJmh {
         }
     }
 
+    @Benchmark
+    @Throws(InterruptedException::class)
+    open fun mode_F_A_payload_using_windowed_tasks_coroutines_100(
+    ) {
+       runParametrized(100)
+    }
+
+    @Benchmark
+    @Throws(InterruptedException::class)
+    open fun mode_F_B_payload_using_windowed_tasks_coroutines_50(
+    ) {
+       runParametrized(50)
+    }
+
+    @Benchmark
+    @Throws(InterruptedException::class)
+    open fun mode_F_C_payload_using_windowed_tasks_coroutines_25(
+    ) {
+       runParametrized(25)
+    }
+
+    private fun runParametrized(windowSize: Int) = runBlocking {
+        corCounter.set(0)
+        tasks.windowed(windowSize, windowSize, true).map { window ->
+            async {
+                window.map {
+                    corCounter.incrementAndGet()
+                    DetachedTaskPayloadFactory.createPayloadByDetachedTask(
+                        task = it,
+                        topic = "coroutineTopic",
+                        partition = 1,
+                        offset = 1,
+                        taskHolderId = 123
+                    )
+                }
+            }
+        }.awaitAll().flatten()
+    }
+
     private fun <A> Collection<A>.forEachParallel(f: suspend (A) -> Unit): Unit = runBlocking {
         map { async { f(it) } }.awaitAll()
+    }
+
+    private fun <A> Collection<A>.forEachParallelWindowed(
+        parallelism: Int,
+        f: suspend (A) -> Unit
+    ): Unit = runBlocking {
+        val window = size / parallelism
+        windowed(window, window, true).map { list -> async { list.map { f(it) } } }.awaitAll().flatten()
     }
 }
