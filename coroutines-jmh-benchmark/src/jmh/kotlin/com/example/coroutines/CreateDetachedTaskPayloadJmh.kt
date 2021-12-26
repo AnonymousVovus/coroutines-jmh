@@ -2,6 +2,10 @@ package com.example.coroutines
 
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.asFlow
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import org.openjdk.jmh.annotations.*
 import java.util.*
@@ -140,6 +144,42 @@ open class CreateDetachedTaskPayloadJmh {
     open fun mode_F_C_payload_using_windowed_tasks_coroutines_25(
     ) {
        runParametrized(25)
+    }
+
+    @Benchmark
+    @Throws(InterruptedException::class)
+    open fun mode_G_payload_using_buffered_flow() = runBlocking {
+        corCounter.set(0)
+        tasks.asFlow().buffer(100).collect {
+            corCounter.incrementAndGet()
+            DetachedTaskPayloadFactory.createPayloadByDetachedTask(
+                task = it,
+                topic = "coroutineTopic",
+                partition = 1,
+                offset = 1,
+                taskHolderId = 123
+            )
+        }
+    }
+
+    @Benchmark
+    @Throws(InterruptedException::class)
+    open fun mode_H_payload_using_buffered_flow_2() = runBlocking {
+        corCounter.set(0)
+        val flow = flow {
+            tasks.map { emit(it) }
+        }
+
+        flow.buffer(100).collect {
+            corCounter.incrementAndGet()
+            DetachedTaskPayloadFactory.createPayloadByDetachedTask(
+                task = it,
+                topic = "coroutineTopic",
+                partition = 1,
+                offset = 1,
+                taskHolderId = 123
+            )
+        }
     }
 
     private fun runParametrized(windowSize: Int) = runBlocking {
